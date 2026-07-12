@@ -1,0 +1,1771 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>图片颜色聚类可视化</title>
+    <link rel="icon" href="data:,">
+    <style>
+        :root {
+            --ink: #172033;
+            --soft-ink: #344054;
+            --muted: #667085;
+            --line: #d9e2ec;
+            --paper: #f3f6fa;
+            --panel: rgba(255, 255, 255, 0.94);
+            --teal: #087f8c;
+            --blue: #2667ff;
+            --coral: #e4572e;
+            --amber: #f3a712;
+            --green: #2fbf71;
+            --plum: #6d597a;
+            --shadow: 0 22px 55px rgba(23, 32, 51, 0.13);
+            --soft-shadow: 0 14px 32px rgba(23, 32, 51, 0.09);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            color: var(--ink);
+            background:
+                radial-gradient(circle at 12px 12px, rgba(8, 127, 140, 0.08) 0 2px, transparent 2px),
+                linear-gradient(135deg, #f8fbff 0%, #edf3f8 46%, #f7f3ee 100%);
+            background-size: 34px 34px, auto;
+            font-family: Arial, "Microsoft YaHei", sans-serif;
+        }
+
+        header {
+            display: grid;
+            grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+            gap: 28px;
+            align-items: center;
+            max-width: 1400px;
+            margin: 18px auto 0;
+            padding: 28px;
+            border: 1px solid rgba(255, 255, 255, 0.72);
+            border-radius: 14px;
+            background:
+                linear-gradient(135deg, rgba(23, 32, 51, 0.96), rgba(35, 50, 73, 0.96)),
+                #172033;
+            color: #ffffff;
+            box-shadow: var(--shadow);
+        }
+
+        .kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin: 0 0 10px;
+            color: rgba(255, 255, 255, 0.78);
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .kicker::before {
+            content: "";
+            width: 34px;
+            height: 4px;
+            border-radius: 999px;
+            background: linear-gradient(90deg, var(--teal), var(--amber), var(--coral));
+        }
+
+        h1 {
+            max-width: 760px;
+            margin: 0;
+            font-size: 34px;
+            line-height: 1.18;
+            font-weight: 900;
+            letter-spacing: 0;
+        }
+
+        .header-subtitle {
+            max-width: 760px;
+            margin: 10px 0 0;
+            color: rgba(255, 255, 255, 0.76);
+            font-size: 14px;
+            line-height: 1.65;
+        }
+
+        .header-art {
+            display: grid;
+            grid-template-columns: 1fr 0.7fr 1.2fr;
+            grid-template-rows: 82px 58px 72px;
+            gap: 10px;
+            min-height: 224px;
+        }
+
+        .header-art span {
+            border: 1px solid rgba(255, 255, 255, 0.28);
+            border-radius: 10px;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 12px 26px rgba(0, 0, 0, 0.16);
+        }
+
+        .tile-a { grid-row: span 2; background: #087f8c; }
+        .tile-b { background: #f3a712; }
+        .tile-c { grid-row: span 2; background: #2667ff; }
+        .tile-d { background: #e4572e; }
+        .tile-e { grid-column: span 2; background: #2fbf71; }
+        .tile-f { background: #6d597a; }
+
+        main {
+            display: grid;
+            grid-template-columns: 326px minmax(0, 1fr);
+            grid-template-areas:
+                "controls workspace"
+                "controls ribbon"
+                "controls analysis"
+                "controls palette"
+                "controls ai";
+            gap: 18px;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 18px 20px 32px;
+        }
+
+        .toolbar {
+            grid-area: controls;
+            position: sticky;
+            top: 18px;
+            align-self: start;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+            padding: 18px;
+            border: 1px solid rgba(8, 127, 140, 0.2);
+            border-radius: 14px;
+            background: var(--panel);
+            box-shadow: var(--shadow);
+        }
+
+        .toolbar::before {
+            content: "调色控制台";
+            color: var(--ink);
+            font-size: 18px;
+            font-weight: 900;
+        }
+
+        .toolbar::after {
+            content: "";
+            height: 10px;
+            border-radius: 999px;
+            background: linear-gradient(90deg, var(--teal), var(--amber), var(--coral), var(--blue), var(--green));
+        }
+
+        .field {
+            min-width: 0;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 900;
+        }
+
+        select,
+        input,
+        button {
+            width: 100%;
+            min-height: 42px;
+            border: 1px solid #c9d5e2;
+            border-radius: 10px;
+            background: #ffffff;
+            color: var(--ink);
+            font: inherit;
+        }
+
+        select,
+        input {
+            padding: 0 12px;
+            outline: none;
+            transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+        }
+
+        select:focus,
+        input:focus {
+            border-color: var(--teal);
+            box-shadow: 0 0 0 4px rgba(8, 127, 140, 0.14);
+        }
+
+        input[type="file"] {
+            padding: 8px;
+            font-size: 13px;
+        }
+        .k-field {
+            display: grid;
+            gap: 8px;
+        }
+
+        input[type="range"] {
+            min-height: 22px;
+            padding: 0;
+            accent-color: var(--teal);
+        }
+
+        button {
+            cursor: pointer;
+            border: 0;
+            background: linear-gradient(135deg, #087f8c, #0b6670);
+            color: #ffffff;
+            font-weight: 900;
+            box-shadow: 0 12px 24px rgba(8, 127, 140, 0.22);
+            transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            filter: saturate(1.05);
+            box-shadow: 0 16px 30px rgba(8, 127, 140, 0.28);
+        }
+
+        button.secondary {
+            background: linear-gradient(135deg, #e4572e, #b43f24);
+            box-shadow: 0 12px 24px rgba(228, 87, 46, 0.2);
+        }
+
+        button.secondary:hover {
+            box-shadow: 0 16px 30px rgba(228, 87, 46, 0.28);
+        }
+
+        button:disabled {
+            cursor: wait;
+            opacity: 0.72;
+            transform: none;
+        }
+
+        .workspace {
+            grid-area: workspace;
+            display: grid;
+            grid-template-columns: minmax(360px, 0.9fr) minmax(460px, 1.1fr);
+            gap: 18px;
+        }
+
+        .panel,
+        .ai-panel {
+            min-width: 0;
+            border: 1px solid rgba(217, 226, 236, 0.9);
+            border-radius: 14px;
+            background: var(--panel);
+            box-shadow: var(--soft-shadow);
+        }
+
+        .panel {
+            padding: 18px;
+        }
+
+        .panel h2,
+        .ai-panel h2 {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 0 0 14px;
+            font-size: 18px;
+            line-height: 1.25;
+            font-weight: 900;
+        }
+
+        .panel h2::before,
+        .ai-panel h2::before {
+            content: "";
+            width: 12px;
+            height: 12px;
+            border-radius: 4px;
+            background: var(--amber);
+            box-shadow: 18px 0 0 var(--coral), 36px 0 0 var(--teal);
+            margin-right: 34px;
+        }
+
+        .canvas-wrap {
+            position: relative;
+            display: grid;
+            place-items: center;
+            min-height: 418px;
+            overflow: hidden;
+            border: 1px solid #d9e2ec;
+            border-radius: 12px;
+            background:
+                linear-gradient(45deg, rgba(8, 127, 140, 0.08) 25%, transparent 25%),
+                linear-gradient(-45deg, rgba(38, 103, 255, 0.08) 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, rgba(8, 127, 140, 0.08) 75%),
+                linear-gradient(-45deg, transparent 75%, rgba(38, 103, 255, 0.08) 75%),
+                #f8fbff;
+            background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+            background-size: 24px 24px;
+        }
+
+        .canvas-wrap::after {
+            content: "";
+            position: absolute;
+            inset: 14px;
+            pointer-events: none;
+            border: 1px solid rgba(255, 255, 255, 0.72);
+            border-radius: 10px;
+        }
+
+        canvas {
+            display: block;
+            max-width: 100%;
+            height: auto;
+        }
+
+        #imageCanvas {
+            position: relative;
+            z-index: 1;
+            border-radius: 8px;
+            box-shadow: 0 18px 36px rgba(23, 32, 51, 0.24);
+        }
+
+        #chart {
+            width: 100%;
+            height: 470px;
+        }
+
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+            gap: 0;
+            margin-top: 14px;
+            overflow: hidden;
+            border: 1px solid #d9e2ec;
+            border-radius: 12px;
+            background: #fbfcff;
+        }
+
+        .metric {
+            min-height: 78px;
+            padding: 12px;
+            border-right: 1px solid #e4ebf2;
+            border-top: 4px solid var(--blue);
+        }
+
+        .metric:nth-child(2) { border-top-color: var(--teal); }
+        .metric:nth-child(3) { border-top-color: var(--amber); }
+        .metric:nth-child(4) { border-top-color: var(--coral); }
+        .metric:nth-child(5) { border-top-color: var(--green); border-right: 0; }
+
+        .metric span {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 900;
+        }
+
+        .metric strong {
+            display: block;
+            margin-top: 7px;
+            font-size: 17px;
+            line-height: 1.25;
+        }
+
+
+
+        .analysis-lab {
+            grid-area: analysis;
+            display: grid;
+            grid-template-columns: minmax(320px, 0.92fr) minmax(420px, 1.08fr);
+            gap: 18px;
+        }
+
+        .rebuild-wrap {
+            display: grid;
+            place-items: center;
+            min-height: 300px;
+            overflow: hidden;
+            border: 1px solid #d9e2ec;
+            border-radius: 12px;
+            background: #fbfcff;
+        }
+
+        #reconstructedCanvas {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            image-rendering: auto;
+            box-shadow: 0 16px 32px rgba(23, 32, 51, 0.18);
+        }
+
+        #diagnosisChart {
+            width: 100%;
+            height: 286px;
+        }
+
+        .quality-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .quality-card {
+            min-height: 74px;
+            padding: 11px;
+            border: 1px solid #d9e2ec;
+            border-radius: 12px;
+            background: #fbfcff;
+        }
+
+        .quality-card span {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 900;
+        }
+
+        .quality-card strong {
+            display: block;
+            margin-top: 7px;
+            color: var(--ink);
+            font-size: 17px;
+            line-height: 1.25;
+        }
+
+        .copy-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-top: 12px;
+        }
+
+        .copy-row button {
+            max-width: 180px;
+        }
+
+        .copy-row span {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .palette-insight {
+            grid-area: ribbon;
+            display: grid;
+            grid-template-columns: minmax(180px, 260px) minmax(0, 1fr);
+            gap: 14px;
+            align-items: stretch;
+            padding: 16px;
+            border: 1px solid rgba(217, 226, 236, 0.95);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.94);
+            box-shadow: var(--soft-shadow);
+        }
+
+        .insight-copy h2 {
+            margin: 0 0 8px;
+            font-size: 18px;
+            line-height: 1.25;
+            font-weight: 900;
+        }
+
+        .insight-copy p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.55;
+        }
+
+        .ribbon-stack {
+            display: grid;
+            gap: 10px;
+            align-content: center;
+        }
+
+        .ribbon-bar {
+            display: flex;
+            min-height: 64px;
+            overflow: hidden;
+            border: 1px solid rgba(23, 32, 51, 0.12);
+            border-radius: 14px;
+            background: #ffffff;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+        }
+
+        .ribbon-segment {
+            position: relative;
+            min-width: 7%;
+            transition: flex-basis 0.25s ease;
+        }
+
+        .ribbon-segment::after {
+            content: attr(data-label);
+            position: absolute;
+            left: 10px;
+            bottom: 8px;
+            max-width: calc(100% - 16px);
+            overflow: hidden;
+            color: rgba(255, 255, 255, 0.92);
+            font-size: 12px;
+            font-weight: 900;
+            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
+            white-space: nowrap;
+        }
+
+        .ribbon-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .ribbon-chip {
+            padding: 6px 9px;
+            border: 1px solid #d9e2ec;
+            border-radius: 999px;
+            background: #fbfcff;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .palette {
+            grid-area: palette;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 14px;
+        }
+
+        .color-item {
+            display: grid;
+            grid-template-columns: 78px 1fr;
+            gap: 13px;
+            min-height: 108px;
+            padding: 13px;
+            border: 1px solid rgba(217, 226, 236, 0.95);
+            border-radius: 14px;
+            background: #ffffff;
+            box-shadow: 0 12px 28px rgba(23, 32, 51, 0.08);
+        }
+
+        .swatch {
+            width: 78px;
+            height: 78px;
+            border: 1px solid rgba(23, 32, 51, 0.2);
+            border-radius: 12px;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.32), 0 10px 18px rgba(23, 32, 51, 0.12);
+        }
+
+        .color-item h3 {
+            margin: 0 0 8px;
+            font-size: 15px;
+            font-weight: 900;
+        }
+
+        .color-item p {
+            margin: 3px 0;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.35;
+        }
+
+        .ai-panel {
+            grid-area: ai;
+            display: grid;
+            grid-template-columns: minmax(280px, 1fr) minmax(220px, 280px);
+            gap: 16px;
+            padding: 18px;
+        }
+
+        .ai-controls {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr 0.8fr;
+            gap: 10px;
+        }
+
+        .ai-result {
+            min-height: 118px;
+            margin-top: 12px;
+            padding: 14px;
+            white-space: pre-wrap;
+            border: 1px solid #d9e2ec;
+            border-radius: 12px;
+            background: #fbfcff;
+            color: var(--soft-ink);
+            font-size: 14px;
+            line-height: 1.55;
+        }
+
+        .status {
+            min-height: 24px;
+            margin-top: 10px;
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        @media (max-width: 720px) {
+            .palette-insight {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .github-box {
+            align-self: stretch;
+            padding: 14px;
+            border: 1px solid #d9e2ec;
+            border-radius: 12px;
+            background:
+                linear-gradient(180deg, rgba(8, 127, 140, 0.08), rgba(243, 167, 18, 0.08)),
+                #fbfcff;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.55;
+        }
+
+        .github-box strong {
+            display: block;
+            margin-bottom: 4px;
+            color: var(--ink);
+            font-size: 15px;
+        }
+
+        @media (max-width: 1180px) {
+            header,
+            main {
+                max-width: 980px;
+            }
+
+            header {
+                grid-template-columns: 1fr;
+            }
+
+            .header-art {
+                min-height: 150px;
+                grid-template-rows: 50px 42px 46px;
+            }
+
+            main {
+                grid-template-columns: 1fr;
+                grid-template-areas:
+                    "controls"
+                    "workspace"
+                    "ribbon"
+                    "analysis"
+                    "palette"
+                    "ai";
+            }
+
+            .toolbar {
+                position: static;
+                grid-template-columns: repeat(3, minmax(180px, 1fr));
+            }
+
+            .toolbar::before,
+            .toolbar::after {
+                grid-column: 1 / -1;
+            }
+
+            .workspace,
+            .analysis-lab,
+            .ai-panel {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 720px) {
+            header {
+                margin: 10px 10px 0;
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 25px;
+            }
+
+            main {
+                padding: 12px 10px 24px;
+            }
+
+            .toolbar,
+            .summary,
+            .quality-grid,
+            .ai-controls {
+                grid-template-columns: 1fr;
+            }
+
+            .header-art {
+                display: none;
+            }
+
+            .canvas-wrap {
+                min-height: 310px;
+            }
+
+            #chart {
+                height: 390px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-copy">
+            <p class="kicker">Color Cluster Studio</p>
+            <h1>图片主色聚类可视化工作台</h1>
+            <p class="header-subtitle">从图片像素中提取主色，比较颜色占比，并用 RGB / LAB 两种空间观察聚类结果。</p>
+        </div>
+        <div class="header-art" aria-hidden="true">
+            <span class="tile-a"></span>
+            <span class="tile-b"></span>
+            <span class="tile-c"></span>
+            <span class="tile-d"></span>
+            <span class="tile-e"></span>
+            <span class="tile-f"></span>
+        </div>
+    </header>
+
+    <main>
+        <section class="toolbar" aria-label="控制面板">
+            <div class="field">
+                <label for="imageSelect">示例图片</label>
+                <select id="imageSelect">
+                    <option value="images/01.jpg">图片 1</option>
+                    <option value="images/02.jpg">图片 2</option>
+                    <option value="images/03.jpg">图片 3</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="uploadInput">本地图片</label>
+                <input id="uploadInput" type="file" accept="image/*">
+            </div>
+            <div class="field k-field">
+                <label for="kSelect">K 值：<span id="kValueLabel">5</span></label>
+                <input id="kSelect" type="number" min="2" max="12" step="1" value="5">
+                <input id="kRange" type="range" min="2" max="12" step="1" value="5" aria-label="K 值滑块">
+            </div>
+            <div class="field">
+                <label for="spaceSelect">颜色空间</label>
+                <select id="spaceSelect">
+                    <option value="rgb">RGB</option>
+                    <option value="lab">LAB</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="chartTypeSelect">图表类型</label>
+                <select id="chartTypeSelect">
+                    <option value="pie">饼图</option>
+                    <option value="bar">柱状图</option>
+                    <option value="treemap">矩形色块图</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="initSelect">初始化</label>
+                <select id="initSelect">
+                    <option value="random" selected>随机初始化</option>
+                    <option value="kmeans++">K-means++ 初始化</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="restartSelect">稳定性</label>
+                <select id="restartSelect">
+                    <option value="1">单次运行</option>
+                    <option value="3" selected>3 次择优</option>
+                    <option value="5">5 次择优</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>&nbsp;</label>
+                <button id="runBtn" type="button">开始聚类</button>
+            </div>
+        </section>
+
+        <section class="workspace">
+            <div class="panel">
+                <h2>图片像素</h2>
+                <div class="canvas-wrap">
+                    <canvas id="imageCanvas"></canvas>
+                </div>
+                <div id="status" class="status"></div>
+                <div class="summary">
+                    <div class="metric">
+                        <span>图片尺寸</span>
+                        <strong id="sizeMetric">-</strong>
+                    </div>
+                    <div class="metric">
+                        <span>分析像素</span>
+                        <strong id="pixelMetric">-</strong>
+                    </div>
+                    <div class="metric">
+                        <span>聚类数量</span>
+                        <strong id="kMetric">-</strong>
+                    </div>
+                    <div class="metric">
+                        <span>颜色空间</span>
+                        <strong id="spaceMetric">-</strong>
+                    </div>
+                    <div class="metric">
+                        <span>算法状态</span>
+                        <strong id="algoMetric">-</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>聚类图表</h2>
+                <div id="chart"></div>
+            </div>
+        </section>
+
+        <section class="palette-insight" aria-label="主色占比总览">
+            <div class="insight-copy">
+                <h2>主色比例总览</h2>
+                <p>色带宽度按像素数量占比缩放，色带颜色取每个类簇的 RGB 均值。</p>
+            </div>
+            <div class="ribbon-stack">
+                <div id="paletteRibbon" class="ribbon-bar"></div>
+                <div id="ribbonMeta" class="ribbon-meta"></div>
+            </div>
+        </section>
+
+
+        <section class="analysis-lab" aria-label="算法诊断">
+            <div class="panel">
+                <h2>聚类重构图</h2>
+                <div class="rebuild-wrap">
+                    <canvas id="reconstructedCanvas"></canvas>
+                </div>
+                <div class="copy-row">
+                    <button id="copyPaletteBtn" type="button">复制颜色方案</button>
+                    <span id="copyStatus">输出 RGB 与 HEX 色值</span>
+                </div>
+            </div>
+            <div class="panel">
+                <h2>K-means 收敛诊断</h2>
+                <div id="diagnosisChart"></div>
+                <div class="quality-grid">
+                    <div class="quality-card">
+                        <span>初始误差</span>
+                        <strong id="initialErrorMetric">-</strong>
+                    </div>
+                    <div class="quality-card">
+                        <span>最终误差</span>
+                        <strong id="finalErrorMetric">-</strong>
+                    </div>
+                    <div class="quality-card">
+                        <span>误差下降</span>
+                        <strong id="improveMetric">-</strong>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <section id="palette" class="palette" aria-label="颜色类簇"></section>
+
+        <section class="ai-panel">
+            <div>
+                <h2>颜色和谐评价</h2>
+                <div class="ai-controls">
+                    <div class="field">
+                        <label for="apiBaseInput">接口地址</label>
+                        <input id="apiBaseInput" type="text" value="https://api.closeaiasia.com/v1/chat/completions">
+                    </div>
+                    <div class="field">
+                        <label for="modelInput">模型</label>
+                        <input id="modelInput" type="text" value="gpt-4o-mini">
+                    </div>
+                    <div class="field">
+                        <label for="apiKeyInput">API Key</label>
+                        <input id="apiKeyInput" type="password" placeholder="可留空">
+                    </div>
+                </div>
+                <div style="margin-top: 10px;">
+                    <button id="aiBtn" class="secondary" type="button">评价颜色搭配</button>
+                </div>
+                <div id="aiResult" class="ai-result"></div>
+            </div>
+            <div class="github-box">
+                <strong>GitHub Pages</strong><br>
+                本目录可直接作为静态站点上传。将 index.html、echarts.min.js、images 文件夹推送到 GitHub 仓库后，在 Settings / Pages 中选择 main 分支和根目录即可发布。
+            </div>
+        </section>
+    </main>
+
+    <script src="echarts.min.js"></script>
+    <script>
+        var canvas = document.getElementById("imageCanvas");
+        var context = canvas.getContext("2d");
+        var chart = echarts.init(document.getElementById("chart"));
+        var diagnosisChart = echarts.init(document.getElementById("diagnosisChart"));
+        var currentImageData = null;
+        var currentPixels = [];
+        var latestClusters = [];
+        var currentImageName = "图片 1";
+
+        function setStatus(message) {
+            document.getElementById("status").textContent = message;
+        }
+
+        function rgbString(color) {
+            return "rgb(" + color[0] + ", " + color[1] + ", " + color[2] + ")";
+        }
+
+        function loadImage(src, name) {
+            return new Promise(function (resolve, reject) {
+                var img = new Image();
+                img.onload = function () {
+                    var maxSide = 560;
+                    var scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+                    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+                    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+                    context.clearRect(0, 0, canvas.width, canvas.height);
+                    context.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                    currentImageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                    currentPixels = extractPixels(currentImageData.data);
+                    currentImageName = name;
+
+                    document.getElementById("sizeMetric").textContent = canvas.width + " x " + canvas.height;
+                    document.getElementById("pixelMetric").textContent = currentPixels.length.toLocaleString();
+                    setStatus("已读取 " + currentImageName + " 的 canvas 像素。");
+                    resolve();
+                };
+                img.onerror = function () {
+                    reject(new Error("图片加载失败"));
+                };
+                img.src = src;
+            });
+        }
+
+        function extractPixels(data) {
+            var pixels = [];
+            for (var i = 0; i < data.length; i += 4) {
+                if (data[i + 3] > 0) {
+                    pixels.push({
+                        rgb: [data[i], data[i + 1], data[i + 2]],
+                        pixelIndex: i / 4
+                    });
+                }
+            }
+            return pixels;
+        }
+
+        function colorDistance(a, b) {
+            var sum = 0;
+            for (var i = 0; i < a.length; i++) {
+                var diff = a[i] - b[i];
+                sum += diff * diff;
+            }
+            return Math.sqrt(sum);
+        }
+
+        function rgbToLab(rgb) {
+            var r = rgb[0] / 255;
+            var g = rgb[1] / 255;
+            var b = rgb[2] / 255;
+
+            r = r > 0.04045 ? Math.pow((r + 0.055) / 1.055, 2.4) : r / 12.92;
+            g = g > 0.04045 ? Math.pow((g + 0.055) / 1.055, 2.4) : g / 12.92;
+            b = b > 0.04045 ? Math.pow((b + 0.055) / 1.055, 2.4) : b / 12.92;
+
+            var x = (r * 0.4124 + g * 0.3576 + b * 0.1805) / 0.95047;
+            var y = (r * 0.2126 + g * 0.7152 + b * 0.0722) / 1.00000;
+            var z = (r * 0.0193 + g * 0.1192 + b * 0.9505) / 1.08883;
+
+            x = x > 0.008856 ? Math.cbrt(x) : 7.787 * x + 16 / 116;
+            y = y > 0.008856 ? Math.cbrt(y) : 7.787 * y + 16 / 116;
+            z = z > 0.008856 ? Math.cbrt(z) : 7.787 * z + 16 / 116;
+
+            return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
+        }
+
+        function hashText(text) {
+            var hash = 2166136261;
+            for (var i = 0; i < text.length; i++) {
+                hash ^= text.charCodeAt(i);
+                hash = Math.imul(hash, 16777619);
+            }
+            return hash >>> 0;
+        }
+
+        function createSeededRandom(seed) {
+            var state = seed >>> 0;
+            return function () {
+                state = (Math.imul(1664525, state) + 1013904223) >>> 0;
+                return state / 4294967296;
+            };
+        }
+
+        function squaredDistance(a, b) {
+            var sum = 0;
+            for (var i = 0; i < a.length; i++) {
+                var diff = a[i] - b[i];
+                sum += diff * diff;
+            }
+            return sum;
+        }
+
+        function initializeRandomCenters(points, k, random) {
+            var centers = [];
+            var used = {};
+            var attempts = 0;
+            while (centers.length < k && attempts < k * 40) {
+                var index = Math.floor(random() * points.length);
+                if (!used[index]) {
+                    used[index] = true;
+                    centers.push(points[index].slice());
+                }
+                attempts += 1;
+            }
+            for (var i = 0; centers.length < k && i < points.length; i++) {
+                if (!used[i]) {
+                    used[i] = true;
+                    centers.push(points[i].slice());
+                }
+            }
+            return centers;
+        }
+
+        function initializeKMeansPlusPlus(points, k, random) {
+            var centers = [];
+            var firstIndex = Math.floor(random() * points.length);
+            centers.push(points[firstIndex].slice());
+            var nearestDistances = new Array(points.length).fill(Infinity);
+
+            while (centers.length < k) {
+                var latestCenter = centers[centers.length - 1];
+                var distanceTotal = 0;
+                for (var i = 0; i < points.length; i++) {
+                    var distance = squaredDistance(points[i], latestCenter);
+                    if (distance < nearestDistances[i]) {
+                        nearestDistances[i] = distance;
+                    }
+                    distanceTotal += nearestDistances[i];
+                }
+
+                if (distanceTotal === 0) {
+                    centers.push(points[Math.floor(random() * points.length)].slice());
+                    continue;
+                }
+
+                var target = random() * distanceTotal;
+                var running = 0;
+                var selectedIndex = points.length - 1;
+                for (var j = 0; j < points.length; j++) {
+                    running += nearestDistances[j];
+                    if (running >= target) {
+                        selectedIndex = j;
+                        break;
+                    }
+                }
+                centers.push(points[selectedIndex].slice());
+            }
+            return centers;
+        }
+
+        function initializeCenters(points, k, strategy, random) {
+            if (strategy === "random") {
+                return initializeRandomCenters(points, k, random);
+            }
+            return initializeKMeansPlusPlus(points, k, random);
+        }
+
+        function findFarthestPoint(points, centers) {
+            var farthestIndex = 0;
+            var farthestDistance = -1;
+            for (var i = 0; i < points.length; i++) {
+                var nearest = Infinity;
+                for (var j = 0; j < centers.length; j++) {
+                    nearest = Math.min(nearest, squaredDistance(points[i], centers[j]));
+                }
+                if (nearest > farthestDistance) {
+                    farthestDistance = nearest;
+                    farthestIndex = i;
+                }
+            }
+            return points[farthestIndex].slice();
+        }
+
+        function assignLabels(points, centers, labels) {
+            var changed = 0;
+            for (var i = 0; i < points.length; i++) {
+                var bestIndex = 0;
+                var bestDistance = Infinity;
+                for (var j = 0; j < centers.length; j++) {
+                    var distance = squaredDistance(points[i], centers[j]);
+                    if (distance < bestDistance) {
+                        bestDistance = distance;
+                        bestIndex = j;
+                    }
+                }
+                if (labels[i] !== bestIndex) {
+                    changed += 1;
+                }
+                labels[i] = bestIndex;
+            }
+            return changed;
+        }
+
+        function calculateSSE(points, centers, labels) {
+            var total = 0;
+            for (var i = 0; i < points.length; i++) {
+                total += squaredDistance(points[i], centers[labels[i]]);
+            }
+            return total;
+        }
+
+        function runKMeansOnce(points, k, options, seed) {
+            var random = createSeededRandom(seed);
+            var centers = initializeCenters(points, k, options.initStrategy, random);
+            var labels = new Array(points.length).fill(-1);
+            var history = [];
+            var maxIterations = 24;
+            var tolerance = 0.001;
+            var actualIterations = 0;
+            var previousError = Infinity;
+
+            for (var iter = 0; iter < maxIterations; iter++) {
+                var changed = assignLabels(points, centers, labels);
+                var sums = Array.from({ length: k }, function () {
+                    return { total: [0, 0, 0], count: 0 };
+                });
+
+                for (var p = 0; p < points.length; p++) {
+                    var label = labels[p];
+                    sums[label].total[0] += points[p][0];
+                    sums[label].total[1] += points[p][1];
+                    sums[label].total[2] += points[p][2];
+                    sums[label].count += 1;
+                }
+
+                for (var c = 0; c < k; c++) {
+                    if (sums[c].count > 0) {
+                        centers[c] = [
+                            sums[c].total[0] / sums[c].count,
+                            sums[c].total[1] / sums[c].count,
+                            sums[c].total[2] / sums[c].count
+                        ];
+                    } else {
+                        centers[c] = findFarthestPoint(points, centers);
+                    }
+                }
+
+                assignLabels(points, centers, labels);
+                var error = calculateSSE(points, centers, labels);
+                history.push(error);
+                actualIterations = iter + 1;
+                var relativeDrop = previousError < Infinity ? Math.abs(previousError - error) / Math.max(previousError, 1) : Infinity;
+                if ((changed / points.length) < 0.0005 || relativeDrop < tolerance) {
+                    break;
+                }
+                previousError = error;
+            }
+
+            return {
+                labels: labels,
+                history: history,
+                finalError: history.length ? history[history.length - 1] : Infinity,
+                actualIterations: actualIterations
+            };
+        }
+
+        // K-means 主流程：K-means++ 初始化、多次重启择优、迭代到收敛。
+        function kmeans(pixels, k, colorSpace) {
+            var points = pixels.map(function (pixel) {
+                return colorSpace === "lab" ? rgbToLab(pixel.rgb) : pixel.rgb.slice();
+            });
+            var initStrategy = document.getElementById("initSelect").value;
+            var restarts = Number(document.getElementById("restartSelect").value);
+            var baseSeed = hashText(currentImageName + "-" + canvas.width + "x" + canvas.height + "-" + k + "-" + colorSpace + "-" + initStrategy + "-" + restarts);
+            var bestRun = null;
+
+            for (var restart = 0; restart < restarts; restart++) {
+                var run = runKMeansOnce(points, k, { initStrategy: initStrategy }, baseSeed + restart * 7919);
+                if (!bestRun || run.finalError < bestRun.finalError) {
+                    bestRun = run;
+                    bestRun.bestRestart = restart + 1;
+                }
+            }
+
+            var result = buildClusters(pixels, bestRun.labels, k, colorSpace, bestRun.actualIterations);
+            result.labels = bestRun.labels.slice();
+            result.history = bestRun.history;
+            result.quality = {
+                initialError: bestRun.history.length ? bestRun.history[0] : 0,
+                finalError: bestRun.finalError,
+                improvement: bestRun.history.length && bestRun.history[0] > 0 ? (bestRun.history[0] - bestRun.finalError) / bestRun.history[0] : 0
+            };
+            result.algorithm = {
+                initStrategy: initStrategy,
+                restarts: restarts,
+                bestRestart: bestRun.bestRestart,
+                iterations: bestRun.actualIterations
+            };
+            return result;
+        }
+
+        function buildClusters(pixels, labels, k, colorSpace, iterations) {
+            var clusters = Array.from({ length: k }, function (_, index) {
+                return {
+                    index: index + 1,
+                    rgbSum: [0, 0, 0],
+                    count: 0
+                };
+            });
+
+            for (var i = 0; i < pixels.length; i++) {
+                var label = labels[i];
+                var rgb = pixels[i].rgb;
+                clusters[label].rgbSum[0] += rgb[0];
+                clusters[label].rgbSum[1] += rgb[1];
+                clusters[label].rgbSum[2] += rgb[2];
+                clusters[label].count += 1;
+            }
+
+            return clusters
+                .filter(function (cluster) {
+                    return cluster.count > 0;
+                })
+                .map(function (cluster) {
+                    return {
+                        index: cluster.index,
+                        label: cluster.index - 1,
+                        color: [
+                            Math.round(cluster.rgbSum[0] / cluster.count),
+                            Math.round(cluster.rgbSum[1] / cluster.count),
+                            Math.round(cluster.rgbSum[2] / cluster.count)
+                        ],
+                        count: cluster.count,
+                        colorSpace: colorSpace.toUpperCase(),
+                        iterations: iterations
+                    };
+                })
+                .sort(function (a, b) {
+                    return b.count - a.count;
+                });
+        }
+
+        function formatError(value) {
+            if (!isFinite(value)) {
+                return "-";
+            }
+            if (value >= 1000000) {
+                return (value / 1000000).toFixed(2) + "M";
+            }
+            if (value >= 1000) {
+                return (value / 1000).toFixed(1) + "K";
+            }
+            return value.toFixed(0);
+        }
+
+        function rgbToHex(color) {
+            return "#" + color.map(function (value) {
+                return Math.max(0, Math.min(255, value)).toString(16).padStart(2, "0");
+            }).join("").toUpperCase();
+        }
+
+        function getLabelColorMap(clusters) {
+            var map = {};
+            clusters.forEach(function (cluster) {
+                map[cluster.label] = cluster.color;
+            });
+            return map;
+        }
+
+        function renderReconstruction(clusters) {
+            if (!currentImageData || !clusters.labels) {
+                return;
+            }
+            var targetCanvas = document.getElementById("reconstructedCanvas");
+            var targetContext = targetCanvas.getContext("2d");
+            targetCanvas.width = canvas.width;
+            targetCanvas.height = canvas.height;
+            var output = targetContext.createImageData(canvas.width, canvas.height);
+            output.data.set(currentImageData.data);
+            var labelColors = getLabelColorMap(clusters);
+
+            for (var i = 0; i < currentPixels.length; i++) {
+                var color = labelColors[clusters.labels[i]] || currentPixels[i].rgb;
+                var offset = currentPixels[i].pixelIndex * 4;
+                output.data[offset] = color[0];
+                output.data[offset + 1] = color[1];
+                output.data[offset + 2] = color[2];
+                output.data[offset + 3] = 255;
+            }
+            targetContext.putImageData(output, 0, 0);
+        }
+
+        function renderDiagnosis(clusters) {
+            var history = clusters.history || [];
+            diagnosisChart.setOption({
+                title: {
+                    text: "迭代误差下降曲线",
+                    left: "center",
+                    top: 2,
+                    textStyle: { color: "#172033", fontSize: 15, fontWeight: 800 }
+                },
+                tooltip: {
+                    trigger: "axis",
+                    formatter: function (params) {
+                        var item = params[0];
+                        return "第 " + item.name + " 次迭代<br>SSE：" + formatError(item.value);
+                    }
+                },
+                grid: { left: 58, right: 24, top: 58, bottom: 42 },
+                xAxis: {
+                    type: "category",
+                    name: "迭代",
+                    data: history.map(function (_, index) { return index + 1; }),
+                    axisTick: { show: false },
+                    axisLine: { lineStyle: { color: "#d9e2ec" } },
+                    axisLabel: { color: "#667085" },
+                    nameTextStyle: { color: "#667085" }
+                },
+                yAxis: {
+                    type: "value",
+                    name: "SSE",
+                    splitLine: { lineStyle: { color: "#edf2f7" } },
+                    axisLabel: {
+                        color: "#667085",
+                        formatter: function (value) { return formatError(value); }
+                    },
+                    nameTextStyle: { color: "#667085" }
+                },
+                series: [{
+                    type: "line",
+                    smooth: true,
+                    symbolSize: 6,
+                    lineStyle: { width: 3, color: "#087f8c" },
+                    itemStyle: { color: "#e4572e" },
+                    areaStyle: { color: "rgba(8, 127, 140, 0.12)" },
+                    data: history
+                }]
+            }, true);
+
+            var quality = clusters.quality || { initialError: 0, finalError: 0, improvement: 0 };
+            document.getElementById("initialErrorMetric").textContent = formatError(quality.initialError);
+            document.getElementById("finalErrorMetric").textContent = formatError(quality.finalError);
+            document.getElementById("improveMetric").textContent = (quality.improvement * 100).toFixed(1) + "%";
+        }
+
+        function getPaletteText(clusters) {
+            return clusters.map(function (cluster, index) {
+                return "颜色 " + (index + 1) + ": RGB(" + cluster.color.join(", ") + ")  " + rgbToHex(cluster.color) + "  像素数量 " + cluster.count;
+            }).join("\n");
+        }
+        function renderChart(clusters, chartType) {
+            var total = clusters.reduce(function (sum, item) {
+                return sum + item.count;
+            }, 0);
+            var data = clusters.map(function (cluster, index) {
+                return {
+                    name: "颜色 " + (index + 1),
+                    value: cluster.count,
+                    percent: ((cluster.count / total) * 100).toFixed(2),
+                    rgb: "RGB(" + cluster.color.join(", ") + ")",
+                    itemStyle: { color: rgbString(cluster.color) }
+                };
+            });
+
+            if (chartType === "pie") {
+                chart.setOption({
+                    backgroundColor: "transparent",
+                    title: {
+                        text: currentImageName + " 颜色聚类占比",
+                        left: "center",
+                        top: 4,
+                        textStyle: { color: "#172033", fontSize: 17, fontWeight: 800 }
+                    },
+                    tooltip: {
+                        trigger: "item",
+                        formatter: function (params) {
+                            return params.name + "<br>" + params.data.rgb + "<br>像素数量：" + params.value + "<br>占比：" + params.data.percent + "%";
+                        }
+                    },
+                    legend: {
+                        bottom: 0,
+                        itemWidth: 12,
+                        itemHeight: 12,
+                        textStyle: { color: "#667085" }
+                    },
+                    series: [{
+                        name: "颜色类簇",
+                        type: "pie",
+                        radius: ["38%", "70%"],
+                        center: ["50%", "48%"],
+                        minAngle: 4,
+                        itemStyle: {
+                            borderColor: "#ffffff",
+                            borderWidth: 3,
+                            borderRadius: 7
+                        },
+                        label: {
+                            color: "#344054",
+                            formatter: "{b}  {d}%"
+                        },
+                        labelLine: {
+                            lineStyle: { color: "#98a2b3" }
+                        },
+                        data: data
+                    }]
+                }, true);
+            } else if (chartType === "treemap") {
+                chart.setOption({
+                    backgroundColor: "transparent",
+                    title: {
+                        text: currentImageName + " 均值颜色与像素数量",
+                        left: "center",
+                        top: 4,
+                        textStyle: { color: "#172033", fontSize: 17, fontWeight: 800 }
+                    },
+                    tooltip: {
+                        trigger: "item",
+                        formatter: function (params) {
+                            return params.name + "<br>" + params.data.rgb + "<br>像素数量：" + params.value + "<br>占比：" + params.data.percent + "%";
+                        }
+                    },
+                    series: [{
+                        name: "颜色类簇",
+                        type: "treemap",
+                        roam: false,
+                        nodeClick: false,
+                        breadcrumb: { show: false },
+                        top: 62,
+                        left: 22,
+                        right: 22,
+                        bottom: 22,
+                        squareRatio: 1.18,
+                        visibleMin: 1,
+                        itemStyle: {
+                            borderColor: "#ffffff",
+                            borderWidth: 3,
+                            gapWidth: 3,
+                            borderRadius: 8
+                        },
+                        label: {
+                            show: true,
+                            formatter: function (params) {
+                                return params.name + "\n" + params.data.percent + "%";
+                            },
+                            color: "#172033",
+                            fontWeight: 800,
+                            textBorderColor: "rgba(255,255,255,0.72)",
+                            textBorderWidth: 3
+                        },
+                        upperLabel: { show: false },
+                        data: data
+                    }]
+                }, true);
+            } else {
+                chart.setOption({
+                    backgroundColor: "transparent",
+                    title: {
+                        text: currentImageName + " 类簇像素数量",
+                        left: "center",
+                        top: 4,
+                        textStyle: { color: "#172033", fontSize: 17, fontWeight: 800 }
+                    },
+                    tooltip: {
+                        trigger: "axis",
+                        formatter: function (params) {
+                            var item = params[0].data;
+                            return item.name + "<br>" + item.rgb + "<br>像素数量：" + item.value + "<br>占比：" + item.percent + "%";
+                        }
+                    },
+                    grid: {
+                        left: 62,
+                        right: 28,
+                        bottom: 58,
+                        top: 76
+                    },
+                    xAxis: {
+                        type: "category",
+                        data: data.map(function (item) { return item.name; }),
+                        axisTick: { show: false },
+                        axisLine: { lineStyle: { color: "#d9e2ec" } },
+                        axisLabel: { interval: 0, color: "#667085" }
+                    },
+                    yAxis: {
+                        type: "value",
+                        name: "像素数量",
+                        splitLine: { lineStyle: { color: "#edf2f7" } },
+                        axisLabel: { color: "#667085" },
+                        nameTextStyle: { color: "#667085" }
+                    },
+                    series: [{
+                        name: "像素数量",
+                        type: "bar",
+                        barMaxWidth: 48,
+                        itemStyle: { borderRadius: [9, 9, 0, 0] },
+                        emphasis: { itemStyle: { opacity: 0.86 } },
+                        data: data
+                    }]
+                }, true);
+            }
+        }
+
+        function renderPaletteRibbon(clusters, total) {
+            var ribbon = document.getElementById("paletteRibbon");
+            var meta = document.getElementById("ribbonMeta");
+            if (!ribbon || !meta) {
+                return;
+            }
+
+            ribbon.innerHTML = clusters.map(function (cluster, index) {
+                var percent = ((cluster.count / total) * 100).toFixed(2);
+                return '<div class="ribbon-segment" data-label="' + percent + '%" style="flex-basis:' + percent + '%;background:' + rgbString(cluster.color) + '"></div>';
+            }).join("");
+
+            meta.innerHTML = clusters.slice(0, 4).map(function (cluster, index) {
+                var percent = ((cluster.count / total) * 100).toFixed(1);
+                return '<span class="ribbon-chip">颜色 ' + (index + 1) + ' / ' + percent + '%</span>';
+            }).join("");
+        }
+
+        function renderPalette(clusters) {
+            var palette = document.getElementById("palette");
+            var total = clusters.reduce(function (sum, item) {
+                return sum + item.count;
+            }, 0);
+
+            renderPaletteRibbon(clusters, total);
+
+            palette.innerHTML = clusters.map(function (cluster, index) {
+                var percent = ((cluster.count / total) * 100).toFixed(2);
+                var rgb = cluster.color.join(", ");
+                return [
+                    '<article class="color-item">',
+                    '<div class="swatch" style="background:' + rgbString(cluster.color) + '"></div>',
+                    '<div>',
+                    '<h3>颜色 ' + (index + 1) + '</h3>',
+                    '<p>RGB 均值：(' + rgb + ')</p>',
+                    '<p>像素数量：' + cluster.count.toLocaleString() + '</p>',
+                    '<p>占比：' + percent + '%</p>',
+                    '</div>',
+                    '</article>'
+                ].join("");
+            }).join("");
+        }
+
+        function normalizeKValue(value) {
+            var number = Math.round(Number(value));
+            if (!isFinite(number)) {
+                number = 5;
+            }
+            number = Math.max(2, Math.min(12, number));
+            document.getElementById("kSelect").value = number;
+            document.getElementById("kRange").value = number;
+            document.getElementById("kValueLabel").textContent = number;
+            return number;
+        }
+
+        function runClustering() {
+            if (!currentPixels.length) {
+                return;
+            }
+
+            var runBtn = document.getElementById("runBtn");
+            runBtn.disabled = true;
+            setStatus("正在聚类，请稍候...");
+
+            window.setTimeout(function () {
+                var k = normalizeKValue(document.getElementById("kSelect").value);
+                var colorSpace = document.getElementById("spaceSelect").value;
+                var chartType = document.getElementById("chartTypeSelect").value;
+
+                latestClusters = kmeans(currentPixels, k, colorSpace);
+                renderChart(latestClusters, chartType);
+                renderPalette(latestClusters);
+                renderReconstruction(latestClusters);
+                renderDiagnosis(latestClusters);
+
+                document.getElementById("kMetric").textContent = "K = " + k;
+                document.getElementById("spaceMetric").textContent = colorSpace.toUpperCase();
+                var algorithm = latestClusters.algorithm || { initStrategy: "random", restarts: 1, iterations: 0 };
+                var initName = algorithm.initStrategy === "random" ? "随机中心" : "K-means++";
+                document.getElementById("algoMetric").textContent = initName + " / " + algorithm.restarts + " 重启 / " + algorithm.iterations + " 轮";
+                document.getElementById("aiResult").textContent = localHarmonyAnalysis(latestClusters);
+                setStatus("聚类完成：" + initName + "，" + algorithm.restarts + " 次重启择优，最佳第 " + algorithm.bestRestart + " 次，迭代 " + algorithm.iterations + " 轮。");
+                runBtn.disabled = false;
+            }, 20);
+        }
+
+        function rgbToHsl(color) {
+            var r = color[0] / 255;
+            var g = color[1] / 255;
+            var b = color[2] / 255;
+            var max = Math.max(r, g, b);
+            var min = Math.min(r, g, b);
+            var h = 0;
+            var s = 0;
+            var l = (max + min) / 2;
+
+            if (max !== min) {
+                var d = max - min;
+                s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                if (max === r) {
+                    h = (g - b) / d + (g < b ? 6 : 0);
+                } else if (max === g) {
+                    h = (b - r) / d + 2;
+                } else {
+                    h = (r - g) / d + 4;
+                }
+                h *= 60;
+            }
+
+            return { h: h, s: s, l: l };
+        }
+
+        function localHarmonyAnalysis(clusters) {
+            if (!clusters.length) {
+                return "";
+            }
+
+            var dominant = clusters.slice(0, Math.min(5, clusters.length));
+            var hsl = dominant.map(function (cluster) {
+                return rgbToHsl(cluster.color);
+            });
+            var brightness = dominant.map(function (cluster) {
+                var color = cluster.color;
+                return 0.299 * color[0] + 0.587 * color[1] + 0.114 * color[2];
+            });
+            var contrast = Math.max.apply(null, brightness) - Math.min.apply(null, brightness);
+            var saturationAverage = hsl.reduce(function (sum, item) {
+                return sum + item.s;
+            }, 0) / hsl.length;
+
+            var score = 6;
+            var reason = "主色较统一，整体视觉稳定。";
+            if (contrast > 120 && saturationAverage > 0.22) {
+                score = 9;
+                reason = "明度层次清晰，主色之间既有区分又保持统一，视觉重点明确。";
+            } else if (contrast > 75) {
+                score = 8;
+                reason = "颜色之间有较好的明度差异，画面层次感较强。";
+            } else if (contrast > 40) {
+                score = 7;
+                reason = "颜色关系较协调，但明暗层次还可以进一步拉开。";
+            } else {
+                score = 6;
+                reason = "颜色明度接近，整体统一但层次偏弱。";
+            }
+
+            return "本地规则评价：" + reason + "\n饱和度均值：" + saturationAverage.toFixed(2) + "，明度差：" + contrast.toFixed(1) + "。\n颜色和谐评分：" + score + "/10。";
+        }
+
+        function buildHarmonyPrompt(clusters) {
+            var colors = clusters.map(function (cluster, index) {
+                return "颜色" + (index + 1) + ": RGB(" + cluster.color.join(", ") + "), 像素数量 " + cluster.count;
+            }).join("\n");
+
+            return "请判断下面这些图片主色是否搭配和谐，并给出简短理由。请从色相差异、明度层次、饱和度关系三个角度分析，最后给出 1 到 10 分的和谐评分。\n\n" + colors;
+        }
+
+        function askAIForHarmony(clusters) {
+            var apiKey = document.getElementById("apiKeyInput").value.trim();
+            var apiBase = document.getElementById("apiBaseInput").value.trim();
+            var model = document.getElementById("modelInput").value.trim();
+
+            if (!apiKey || !apiBase || !model) {
+                return Promise.resolve(localHarmonyAnalysis(clusters));
+            }
+
+            return fetch(apiBase, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer " + apiKey
+                },
+                body: JSON.stringify({
+                    model: model,
+                    messages: [
+                        {
+                            role: "system",
+                            content: "你是一名色彩设计与信息可视化助教。"
+                        },
+                        {
+                            role: "user",
+                            content: buildHarmonyPrompt(clusters)
+                        }
+                    ],
+                    temperature: 0.3
+                })
+            })
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error("接口状态码：" + response.status);
+                    }
+                    return response.json();
+                })
+                .then(function (data) {
+                    if (data.choices && data.choices[0] && data.choices[0].message) {
+                        return data.choices[0].message.content;
+                    }
+                    return JSON.stringify(data, null, 2);
+                });
+        }
+
+        document.getElementById("runBtn").addEventListener("click", runClustering);
+        document.getElementById("kSelect").addEventListener("change", runClustering);
+        document.getElementById("kSelect").addEventListener("input", function (event) {
+            normalizeKValue(event.target.value);
+        });
+        document.getElementById("kRange").addEventListener("input", function (event) {
+            document.getElementById("kSelect").value = event.target.value;
+            normalizeKValue(event.target.value);
+        });
+        document.getElementById("kRange").addEventListener("change", runClustering);
+        document.getElementById("spaceSelect").addEventListener("change", runClustering);
+        document.getElementById("initSelect").addEventListener("change", runClustering);
+        document.getElementById("restartSelect").addEventListener("change", runClustering);
+        document.getElementById("chartTypeSelect").addEventListener("change", function () {
+            if (latestClusters.length) {
+                renderChart(latestClusters, document.getElementById("chartTypeSelect").value);
+            }
+        });
+        document.getElementById("imageSelect").addEventListener("change", function (event) {
+            var selected = event.target.options[event.target.selectedIndex];
+            loadImage(event.target.value, selected.textContent).then(runClustering).catch(function (error) {
+                setStatus(error.message);
+            });
+        });
+        document.getElementById("uploadInput").addEventListener("change", function (event) {
+            var file = event.target.files[0];
+            if (!file) {
+                return;
+            }
+            var url = URL.createObjectURL(file);
+            loadImage(url, file.name).then(runClustering).catch(function (error) {
+                setStatus(error.message);
+            });
+        });
+        document.getElementById("aiBtn").addEventListener("click", function () {
+            if (!latestClusters.length) {
+                return;
+            }
+            var aiResult = document.getElementById("aiResult");
+            aiResult.textContent = "正在评价颜色搭配...";
+            askAIForHarmony(latestClusters)
+                .then(function (result) {
+                    aiResult.textContent = result;
+                })
+                .catch(function (error) {
+                    aiResult.textContent = "AI 接口调用失败，已使用本地规则评价。\n" + error.message + "\n\n" + localHarmonyAnalysis(latestClusters);
+                });
+        });
+
+        document.getElementById("copyPaletteBtn").addEventListener("click", function () {
+            if (!latestClusters.length) {
+                return;
+            }
+            var text = getPaletteText(latestClusters);
+            var copyStatus = document.getElementById("copyStatus");
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(function () {
+                    copyStatus.textContent = "颜色方案已复制";
+                }).catch(function () {
+                    copyStatus.textContent = text;
+                });
+            } else {
+                copyStatus.textContent = text;
+            }
+        });
+        window.addEventListener("resize", function () {
+            chart.resize();
+            diagnosisChart.resize();
+        });
+
+        loadImage("images/01.jpg", "图片 1").then(runClustering);
+    </script>
+</body>
+</html>
